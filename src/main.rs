@@ -1,6 +1,6 @@
 use std::env;
-use std::fs::File;
-use std::io::{Read, Write};
+use std::fs::OpenOptions;
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::PathBuf;
 use std::process;
 
@@ -33,10 +33,12 @@ fn main() {
     println!("Kubeconfig location: {}", location);
 
     let mut kubeconfig_raw = String::new();
-    File::open(&location)
-        .unwrap()
-        .read_to_string(&mut kubeconfig_raw)
+    let mut file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&location)
         .unwrap();
+    file.read_to_string(&mut kubeconfig_raw).unwrap();
 
     let mut kubeconfig = serde_yaml::from_str::<Kubeconfig>(&kubeconfig_raw).unwrap();
 
@@ -53,8 +55,7 @@ fn main() {
 
     let updated_kubeconfig = serde_yaml::to_string(&kubeconfig).unwrap();
 
-    File::create(location)
-        .unwrap()
-        .write(updated_kubeconfig.as_bytes())
-        .unwrap();
+    file.seek(SeekFrom::Start(0)).unwrap();
+    file.set_len(0).unwrap();
+    file.write(updated_kubeconfig.as_bytes()).unwrap();
 }
