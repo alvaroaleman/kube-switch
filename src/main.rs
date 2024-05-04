@@ -51,6 +51,21 @@ fn main() {
         process::exit(0);
     }
 
+    let mut found = false;
+    for context in &kubeconfig.contexts {
+        if context.name == *new_context {
+            found = true;
+            break;
+        }
+    }
+    if !found {
+        println!(
+            "Context {} does not exist, refusing to update kubeconfig",
+            *new_context
+        );
+        process::exit(1);
+    }
+
     kubeconfig.current_context = Some(new_context.to_string());
 
     let updated_kubeconfig = serde_yaml::to_string(&kubeconfig).unwrap();
