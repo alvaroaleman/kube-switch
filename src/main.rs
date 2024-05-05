@@ -1,7 +1,7 @@
 use std::env;
-use std::fs::OpenOptions;
+use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process;
 
 use kube::config::Kubeconfig;
@@ -42,9 +42,34 @@ fn main() {
 
     let mut kubeconfig = serde_yaml::from_str::<Kubeconfig>(&kubeconfig_raw).unwrap();
 
+    if Path::new(&args[0]).to_owned().file_name().unwrap() == "cn" {
+        update_namespace(&mut kubeconfig, &mut file, &new_context)
+    } else {
+        update_context(&mut kubeconfig, &mut file, &new_context);
+    }
+}
+
+fn update_namespace(kubeconfig: &mut Kubeconfig, file: &mut File, namespace: &String) {
+    if kubeconfig.current_context.is_none() {
+        println!("No current context set, can not to update namespace");
+        process::exit(1);
+    }
+
+    for context in kubeconfig.contexts.iter_mut() {
+        if context.name == *kubeconfig.current_context.as_ref().unwrap() {
+            context.context.as_mut().unwrap().namespace = Some(namespace.to_string());
+            break;
+        }
+    }
+
+    update_kubeconfig(kubeconfig, file)
+}
+
+fn update_context(kubeconfig: &mut Kubeconfig, file: &mut File, new_context: &String) {
     if kubeconfig
         .current_context
-        .map(|s| s == *new_context)
+        .as_ref()
+        .map(|s| *s == *new_context)
         .unwrap_or(false)
     {
         println!("Already in context {}", new_context);
@@ -68,6 +93,10 @@ fn main() {
 
     kubeconfig.current_context = Some(new_context.to_string());
 
+    update_kubeconfig(kubeconfig, file)
+}
+
+fn update_kubeconfig(kubeconfig: &Kubeconfig, file: &mut File) {
     let updated_kubeconfig = serde_yaml::to_string(&kubeconfig).unwrap();
 
     file.seek(SeekFrom::Start(0)).unwrap();
