@@ -3,7 +3,6 @@ use std::env;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::PathBuf;
-use std::process;
 
 use kube::config::Kubeconfig;
 
@@ -22,8 +21,6 @@ fn main() -> Result<()> {
         },
     };
 
-    println!("Kubeconfig location: {:?}", location);
-
     let mut kubeconfig_raw = String::new();
     let mut file = OpenOptions::new()
         .read(true)
@@ -34,27 +31,41 @@ fn main() -> Result<()> {
 
     let kubeconfig = serde_yaml::from_str::<Kubeconfig>(&kubeconfig_raw)?;
 
-    if args[0].ends_with("/cn") {
-        return update_namespace(kubeconfig, &mut file, &new_context);
+    if args[0] == "cn" || args[0].ends_with("/cn") {
+        update_namespace(kubeconfig, &mut file, new_context)
     } else {
-        return update_context(kubeconfig, &mut file, &new_context);
+        update_context(kubeconfig, &mut file, new_context)
     }
 }
 
 fn update_namespace(mut kubeconfig: Kubeconfig, file: &mut File, namespace: &String) -> Result<()> {
     if kubeconfig.current_context.is_none() {
         println!("No current context set, can not to update namespace");
-        process::exit(1);
+        return Err(anyhow!(
+            "No current context set, can not to update namespace"
+        ));
     }
 
     for context in kubeconfig.contexts.iter_mut() {
         if context.name == *kubeconfig.current_context.as_ref().unwrap() {
+            if context
+                .context
+                .as_ref()
+                .map_or(false, |ctx| ctx.namespace == Some(namespace.to_string()))
+            {
+                println!("Already in namespace {}", namespace);
+                return Ok(());
+            }
             context.context.as_mut().unwrap().namespace = Some(namespace.to_string());
             break;
         }
     }
 
-    update_kubeconfig(kubeconfig, file)
+    update_kubeconfig(kubeconfig, file)?;
+
+    println!("updated namespace to {}", namespace);
+
+    Ok(())
 }
 
 fn update_context(mut kubeconfig: Kubeconfig, file: &mut File, new_context: &str) -> Result<()> {
@@ -64,7 +75,7 @@ fn update_context(mut kubeconfig: Kubeconfig, file: &mut File, new_context: &str
         .unwrap_or(false)
     {
         println!("Already in context {}", new_context);
-        process::exit(0);
+        return Ok(());
     }
 
     let mut found = false;
@@ -75,16 +86,19 @@ fn update_context(mut kubeconfig: Kubeconfig, file: &mut File, new_context: &str
         }
     }
     if !found {
-        println!(
+        return Err(anyhow!(
             "Context {} does not exist, refusing to update kubeconfig",
             new_context
-        );
-        process::exit(1);
+        ));
     }
 
     kubeconfig.current_context = Some(new_context.to_string());
 
-    update_kubeconfig(kubeconfig, file)
+    update_kubeconfig(kubeconfig, file)?;
+
+    println!("Switched to context {}", new_context);
+
+    Ok(())
 }
 
 fn update_kubeconfig(kubeconfig: Kubeconfig, file: &mut File) -> Result<()> {
@@ -92,7 +106,7 @@ fn update_kubeconfig(kubeconfig: Kubeconfig, file: &mut File) -> Result<()> {
 
     file.seek(SeekFrom::Start(0)).unwrap();
     file.set_len(0).unwrap();
-    file.write(updated_kubeconfig.as_bytes()).unwrap();
+    file.write_all(updated_kubeconfig.as_bytes()).unwrap();
 
-    return Ok(());
+    Ok(())
 }
