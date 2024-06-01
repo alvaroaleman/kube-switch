@@ -29,7 +29,10 @@ fn main() -> Result<()> {
         .context(format!("Reading {:?}", location))?;
     file.read_to_string(&mut kubeconfig_raw)?;
 
-    let kubeconfig = serde_yaml::from_str::<Kubeconfig>(&kubeconfig_raw)?;
+    let kubeconfig = match kubeconfig_raw.chars().next() {
+        Some(value) if value == '{' => serde_json::from_str::<Kubeconfig>(&kubeconfig_raw)?,
+        _ => serde_yaml::from_str::<Kubeconfig>(&kubeconfig_raw)?,
+    };
 
     if args[0] == "cn" || args[0].ends_with("/cn") {
         update_namespace(kubeconfig, &mut file, new_context)
@@ -102,7 +105,7 @@ fn update_context(mut kubeconfig: Kubeconfig, file: &mut File, new_context: &str
 }
 
 fn update_kubeconfig(kubeconfig: Kubeconfig, file: &mut File) -> Result<()> {
-    let updated_kubeconfig = serde_yaml::to_string(&kubeconfig)?;
+    let updated_kubeconfig = serde_json::to_string(&kubeconfig)?;
 
     file.seek(SeekFrom::Start(0)).unwrap();
     file.set_len(0).unwrap();
