@@ -6,13 +6,39 @@ use std::path::PathBuf;
 
 use kube::config::Kubeconfig;
 
-fn main() -> Result<()> {
-    let args: Vec<String> = env::args().collect();
-    if args.len() != 2 {
-        return Err(anyhow!("Expected exactly one argument, got {}", args.len()));
-    }
-    let new_context = &args[1];
+use clap::{Parser, Subcommand};
 
+#[derive(Parser)]
+#[command(version, about, long_about = None)]
+#[command(propagate_version = true)]
+struct Opts {
+    #[command(subcommand)]
+    command: Commands,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    ChangeNamespace { namespace: String },
+    ChangeContext { context: String },
+}
+
+fn main() -> Result<()> {
+    let opts = Opts::parse();
+    match &opts.command {
+        Commands::ChangeNamespace { namespace } => {
+            let (kubeconfig, mut file) = get_kubeconfig()?;
+            update_namespace(kubeconfig, &mut file, namespace)?;
+            Ok(())
+        }
+        Commands::ChangeContext { context } => {
+            let (kubeconfig, mut file) = get_kubeconfig()?;
+            update_context(kubeconfig, &mut file, context)?;
+            Ok(())
+        }
+    }
+}
+
+fn get_kubeconfig() -> Result<(Kubeconfig, File)> {
     let location = match env::var("KUBECONFIG") {
         Ok(value) if !value.is_empty() => PathBuf::from(value),
         _ => match env::var("HOME") {
@@ -34,11 +60,7 @@ fn main() -> Result<()> {
         _ => serde_yaml::from_str::<Kubeconfig>(&kubeconfig_raw)?,
     };
 
-    if args[0] == "cn" || args[0].ends_with("/cn") {
-        update_namespace(kubeconfig, &mut file, new_context)
-    } else {
-        update_context(kubeconfig, &mut file, new_context)
-    }
+    Ok((kubeconfig, file))
 }
 
 fn update_namespace(mut kubeconfig: Kubeconfig, file: &mut File, namespace: &String) -> Result<()> {
