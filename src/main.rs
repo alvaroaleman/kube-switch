@@ -29,6 +29,8 @@ enum Commands {
         prefix: String,
         line_of_input: String,
     },
+    /// Prints completion commands, add to your shell by executing `source <(kube-switch completion)`
+    Completion {},
 }
 
 fn main() -> Result<()> {
@@ -63,6 +65,14 @@ fn main() -> Result<()> {
                 }
                 println!("{}", context.name);
             }
+            Ok(())
+        }
+        Commands::Completion {} => {
+            println!(
+                r#"alias cn="kube-switch change-namespace"
+alias sc="kube-switch change-context"
+complete -C "kube-switch complete" sc"#
+            );
             Ok(())
         }
     }
