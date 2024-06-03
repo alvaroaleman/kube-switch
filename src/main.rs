@@ -18,8 +18,17 @@ struct Opts {
 
 #[derive(Subcommand)]
 enum Commands {
-    ChangeNamespace { namespace: String },
-    ChangeContext { context: String },
+    ChangeNamespace {
+        namespace: String,
+    },
+    ChangeContext {
+        context: String,
+    },
+    Complete {
+        command: String,
+        prefix: String,
+        line_of_input: String,
+    },
 }
 
 fn main() -> Result<()> {
@@ -33,6 +42,27 @@ fn main() -> Result<()> {
         Commands::ChangeContext { context } => {
             let (kubeconfig, mut file) = get_kubeconfig()?;
             update_context(kubeconfig, &mut file, context)?;
+            Ok(())
+        }
+        Commands::Complete {
+            command,
+            prefix,
+            line_of_input,
+        } => {
+            if command != "sc" {
+                return Err(anyhow!("Only sc command is supported for completion"));
+            }
+            if !line_of_input.eq("sc") {
+                // already completed
+                return Ok(());
+            };
+            let (kubeconfig, _) = get_kubeconfig()?;
+            for context in kubeconfig.contexts {
+                if !context.name.starts_with(prefix) {
+                    continue;
+                }
+                println!("{}", context.name);
+            }
             Ok(())
         }
     }
