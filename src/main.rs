@@ -1,4 +1,9 @@
 use anyhow::{anyhow, Context, Result};
+use k8s_openapi::api::core::v1::Namespace;
+use kube::{
+    api::{Api, ListParams},
+    Client, ResourceExt,
+};
 use std::env;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -27,13 +32,14 @@ enum Commands {
     Complete {
         command: String,
         prefix: String,
-        line_of_input: String,
+        last_full_word: String,
     },
     /// Prints completion commands, add to your shell by executing `source <(kube-switch completion)`
     Completion {},
 }
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let opts = Opts::parse();
     match &opts.command {
         Commands::ChangeNamespace { namespace } => {
@@ -47,35 +53,54 @@ fn main() -> Result<()> {
             Ok(())
         }
         Commands::Complete {
-            command,
             prefix,
-            line_of_input,
+            last_full_word,
+            ..
         } => {
-            if command != "sc" {
-                return Err(anyhow!("Only sc command is supported for completion"));
-            }
-            if !line_of_input.eq("sc") {
-                // already completed
-                return Ok(());
-            };
-            let (kubeconfig, _) = get_kubeconfig()?;
-            for context in kubeconfig.contexts {
-                if !context.name.starts_with(prefix) {
-                    continue;
+            if last_full_word == "cn" {
+                for namespace in get_namespaces().await? {
+                    if !namespace.starts_with(prefix) {
+                        continue;
+                    }
+                    println!("{}", namespace);
                 }
-                println!("{}", context.name);
+                return Ok(());
             }
+            if last_full_word == "sc" {
+                let (kubeconfig, _) = get_kubeconfig()?;
+                for context in kubeconfig.contexts {
+                    if !context.name.starts_with(prefix) {
+                        continue;
+                    }
+                    println!("{}", context.name);
+                    return Ok(());
+                }
+            };
             Ok(())
         }
         Commands::Completion {} => {
             println!(
                 r#"alias cn="kube-switch change-namespace"
 alias sc="kube-switch change-context"
-complete -C "kube-switch complete" sc"#
+complete -C "kube-switch complete" sc
+complete -C "kube-switch complete" cn
+"#
             );
             Ok(())
         }
     }
+}
+
+async fn get_namespaces() -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let client = Client::try_default().await?;
+
+    let mut namespace_names: Vec<String> = Vec::new();
+    let namespaces: Api<Namespace> = Api::all(client);
+    for ns in namespaces.list(&ListParams::default()).await? {
+        namespace_names.push(ns.name_any());
+    }
+
+    Ok(namespace_names)
 }
 
 fn get_kubeconfig() -> Result<(Kubeconfig, File)> {
