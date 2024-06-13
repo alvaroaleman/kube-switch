@@ -121,7 +121,7 @@ fn get_kubeconfig() -> Result<(Kubeconfig, File)> {
     file.read_to_string(&mut kubeconfig_raw)?;
 
     let kubeconfig = match kubeconfig_raw.chars().next() {
-        Some(value) if value == '{' => serde_json::from_str::<Kubeconfig>(&kubeconfig_raw)?,
+        Some('{') => serde_json::from_str::<Kubeconfig>(&kubeconfig_raw)?,
         _ => serde_yaml::from_str::<Kubeconfig>(&kubeconfig_raw)?,
     };
 
@@ -153,7 +153,7 @@ fn update_namespace(mut kubeconfig: Kubeconfig, file: &mut File, namespace: &Str
 
     update_kubeconfig(kubeconfig, file)?;
 
-    println!("updated namespace to {}", namespace);
+    println!("Updated namespace to {}", namespace);
 
     Ok(())
 }
