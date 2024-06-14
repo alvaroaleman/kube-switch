@@ -73,7 +73,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         continue;
                     }
                     println!("{}", context.name);
-                    return Ok(());
                 }
             };
             Ok(())
