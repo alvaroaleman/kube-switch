@@ -4,14 +4,15 @@ use kube::{
     api::{Api, ListParams},
     Client, ResourceExt,
 };
-use std::env;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::PathBuf;
+use std::{env, ffi::OsStr};
 
 use kube::config::Kubeconfig;
 
 use clap::{Parser, Subcommand};
+use clap_complete::{ArgValueCompleter, CompletionCandidate};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -24,6 +25,7 @@ struct Opts {
 #[derive(Subcommand)]
 enum Commands {
     ChangeNamespace {
+        #[arg(add = ArgValueCompleter::new(namespace_completer))]
         namespace: String,
     },
     ChangeContext {
@@ -198,4 +200,13 @@ fn update_kubeconfig(kubeconfig: Kubeconfig, file: &mut File) -> Result<()> {
     file.write_all(updated_kubeconfig.as_bytes()).unwrap();
 
     Ok(())
+}
+
+async fn namespace_completer(_current: &OsStr) -> Vec<CompletionCandidate> {
+    let mut result = Vec::new();
+    for namespace in get_namespaces().await.unwrap() {
+        result.push(CompletionCandidate::new(namespace));
+    }
+
+    return result;
 }
