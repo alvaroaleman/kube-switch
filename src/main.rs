@@ -35,7 +35,9 @@ enum Commands {
         last_full_word: String,
     },
     /// Prints completion commands, add to your shell by executing `source <(kube-switch completion)`
-    Completion {},
+    Completion {
+        shell: Option<String>,
+    },
 }
 
 #[tokio::main]
@@ -77,14 +79,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             };
             Ok(())
         }
-        Commands::Completion {} => {
-            println!(
-                r#"alias cn="kube-switch change-namespace"
+        Commands::Completion { shell } => {
+            match shell.as_deref() {
+                Some("fish") => {
+                    println!(
+                        r#"alias cn="kube-switch change-namespace"
+alias sc="kube-switch change-context"
+complete -c cn -f -a "(kube-switch complete cn (commandline -ct) cn)"
+complete -c sc -f -a "(kube-switch complete sc (commandline -ct) sc)"
+"#
+                    );
+                }
+                _ => {
+                    println!(
+                        r#"alias cn="kube-switch change-namespace"
 alias sc="kube-switch change-context"
 complete -C "kube-switch complete" sc
 complete -C "kube-switch complete" cn
 "#
-            );
+                    );
+                }
+            };
             Ok(())
         }
     }
